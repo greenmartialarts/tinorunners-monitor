@@ -1,0 +1,47 @@
+name: TinoRunners Monitor
+
+on:
+  schedule:
+    # Run every hour
+    - cron: '0 * * * *'
+  workflow_dispatch: # Allow manual trigger
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-notify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run check script
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC || 'tinorunners-updates-alert' }}
+        run: node check.js
+
+      - name: Commit and push if status updated
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          # Check if status.json is modified
+          if ! git diff --quiet status.json; then
+            echo "Status changed. Committing and pushing..."
+            git add status.json
+            git commit -m "Update last notified week [skip ci]"
+            git push
+          else
+            echo "No status changes."
+          fi
