@@ -1,8 +1,13 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const URL = 'https://tinorunners.org';
 const NTFY_TOPIC = process.env.NTFY_TOPIC || 'tinorunners-updates-alert';
+
+function hashContent(content) {
+  return crypto.createHash('sha256').update(content).digest('hex');
+}
 
 async function main() {
   console.log(`Fetching ${URL}...`);
@@ -12,6 +17,8 @@ async function main() {
       throw new Error(`Failed to fetch website: ${response.status} ${response.statusText}`);
     }
     const html = await response.text();
+    const currentHash = hashContent(html);
+    console.log(`Computed website hash: ${currentHash}`);
 
     // Regex to match "Week of MM/DD/YY"
     const weekRegex = /Week of \d{1,2}\/\d{1,2}\/\d{2,4}/i;
@@ -42,17 +49,17 @@ async function main() {
       }
     }
 
-    if (status.last_notified_week === currentWeek) {
-      console.log(`Already notified for "${currentWeek}". No action taken.`);
+    if (status.last_notified_hash === currentHash) {
+      console.log('Website hash unchanged. No action taken.');
       return;
     }
 
     // Send notification to ntfy
-    console.log(`New week detected! Sending push notification for "${currentWeek}"...`);
+    console.log('Website content changed. Sending push notification...');
     const ntfyUrl = `https://ntfy.sh/${NTFY_TOPIC}`;
     
     // Construct message
-    const message = `TinoRunners schedule updated to: ${currentWeek}\nSite last updated: ${lastUpdated}`;
+    const message = 'TinoRunners site updated.';
     
     const notifyResponse = await fetch(ntfyUrl, {
       method: 'POST',
@@ -71,7 +78,9 @@ async function main() {
     console.log('Notification sent successfully!');
 
     // Update status.json
+    status.last_notified_hash = currentHash;
     status.last_notified_week = currentWeek;
+    status.last_notified_at = new Date().toISOString();
     fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n');
     console.log('status.json updated.');
 
