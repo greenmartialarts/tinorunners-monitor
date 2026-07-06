@@ -9,8 +9,10 @@ An automated, lightweight, and 100% free cron job that monitors [tinorunners.org
 1. **Scraping**: A Node.js script fetches the homepage of `tinorunners.org`.
 2. **Hashing**: It computes a SHA-256 hash of the full page HTML and still extracts the current schedule week and last updated date for context.
 3. **State Management**: The script reads `status.json`. If the current hash matches the last notified hash, it exits to avoid duplicate notifications.
-4. **Notification**: If the website content changed, it posts a message to **ntfy.sh** which instantly fires a push notification to the `ntfy` app on your iPhone.
-5. **Update State**: It writes the new hash back to `status.json` and commits the change back to the repository.
+4. **Change Summary**: When the site changes, it compares the current week and updated date against the previous checkpoint and builds a short summary of what changed.
+5. **History Log**: Each detected update is appended to `history.jsonl` so you have an audit trail of every change.
+6. **Notification**: It posts the comparison summary to **ntfy.sh** which instantly fires a push notification to the `ntfy` app on your iPhone.
+7. **Update State**: It writes the new hash, week, and updated date back to `status.json` and commits the change back to the repository.
 
 ---
 
@@ -76,4 +78,4 @@ node check.js
 NTFY_TOPIC=your-custom-topic node check.js
 ```
 
-The `status.json` file stores the last notified website hash, plus the most recent week and timestamp for reference.
+The `status.json` file stores the last notified website hash, plus the most recent week, updated date, and timestamp for reference. The `history.jsonl` file appends one JSON record per detected update.

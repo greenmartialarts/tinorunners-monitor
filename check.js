@@ -9,6 +9,50 @@ function hashContent(content) {
   return crypto.createHash('sha256').update(content).digest('hex');
 }
 
+function formatValue(value) {
+  return value ? value : 'unknown';
+}
+
+function buildChangeSummary(previousStatus, currentSnapshot) {
+  const changes = [];
+
+  if (previousStatus.last_notified_week && previousStatus.last_notified_week !== currentSnapshot.week) {
+    changes.push(`Week changed from ${previousStatus.last_notified_week} to ${currentSnapshot.week}`);
+  }
+
+  if (previousStatus.last_notified_updated && previousStatus.last_notified_updated !== currentSnapshot.lastUpdated) {
+    changes.push(`Last updated changed from ${previousStatus.last_notified_updated} to ${currentSnapshot.lastUpdated}`);
+  }
+
+  if (previousStatus.last_notified_hash && previousStatus.last_notified_hash !== currentSnapshot.hash && changes.length === 0) {
+    changes.push('Page content changed');
+  } else if (previousStatus.last_notified_hash && previousStatus.last_notified_hash !== currentSnapshot.hash) {
+    changes.push('Page content changed');
+  }
+
+  return changes.length > 0 ? changes : ['Page content changed'];
+}
+
+function buildNotificationBody(summaryLines, previousStatus, currentSnapshot) {
+  const bodyLines = ['TinoRunners schedule update', ''];
+
+  if (previousStatus.last_notified_week) {
+    bodyLines.push(`Previous: ${previousStatus.last_notified_week}`);
+  }
+
+  bodyLines.push(`Current: ${currentSnapshot.week}`);
+
+  if (previousStatus.last_notified_updated || currentSnapshot.lastUpdated) {
+    bodyLines.push(
+      `Last updated: ${formatValue(previousStatus.last_notified_updated)} -> ${formatValue(currentSnapshot.lastUpdated)}`
+    );
+  }
+
+  bodyLines.push('', ...summaryLines);
+
+  return bodyLines.join('\n');
+}
+
 async function main() {
   console.log(`Fetching ${URL}...`);
   try {
@@ -40,6 +84,7 @@ async function main() {
 
     // Load status
     const statusPath = path.join(__dirname, 'status.json');
+    const historyPath = path.join(__dirname, 'history.jsonl');
     let status = { last_notified_week: '' };
     if (fs.existsSync(statusPath)) {
       try {
@@ -54,13 +99,19 @@ async function main() {
       return;
     }
 
+    const currentSnapshot = {
+      hash: currentHash,
+      week: currentWeek,
+      lastUpdated,
+    };
+
+    const summaryLines = buildChangeSummary(status, currentSnapshot);
+    const message = buildNotificationBody(summaryLines, status, currentSnapshot);
+
     // Send notification to ntfy
     console.log('Website content changed. Sending push notification...');
     const ntfyUrl = `https://ntfy.sh/${NTFY_TOPIC}`;
-    
-    // Construct message
-    const message = 'TinoRunners site updated.';
-    
+
     const notifyResponse = await fetch(ntfyUrl, {
       method: 'POST',
       body: message,
@@ -77,9 +128,24 @@ async function main() {
 
     console.log('Notification sent successfully!');
 
+    // Append the update to the history log.
+    const historyEntry = {
+      detected_at: new Date().toISOString(),
+      previous: {
+        hash: status.last_notified_hash || '',
+        week: status.last_notified_week || '',
+        last_updated: status.last_notified_updated || '',
+      },
+      current: currentSnapshot,
+      summary: summaryLines,
+    };
+    fs.appendFileSync(historyPath, `${JSON.stringify(historyEntry)}\n`);
+    console.log('history.jsonl appended.');
+
     // Update status.json
     status.last_notified_hash = currentHash;
     status.last_notified_week = currentWeek;
+    status.last_notified_updated = lastUpdated;
     status.last_notified_at = new Date().toISOString();
     fs.writeFileSync(statusPath, JSON.stringify(status, null, 2) + '\n');
     console.log('status.json updated.');

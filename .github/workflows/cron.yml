@@ -36,12 +36,12 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           
-          # Check if status.json is modified
-          if ! git diff --quiet status.json; then
-            echo "Status changed. Committing and pushing..."
-            git add status.json
-            git commit -m "Update last notified week [skip ci]"
+          # Check if the checkpoint or history log changed
+          if ! git diff --quiet status.json history.jsonl; then
+            echo "Monitor state changed. Committing and pushing..."
+            git add status.json history.jsonl
+            git commit -m "Update TinoRunners history [skip ci]"
             git push
           else
-            echo "No status changes."
+            echo "No monitor state changes."
           fi
